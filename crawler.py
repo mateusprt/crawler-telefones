@@ -1,10 +1,13 @@
 import re
 import requests
+import threading
 
 from bs4 import BeautifulSoup
 
 DOMINIO = 'https://django-anuncios.solyd.com.br'
 URL_AUTOMOVEIS = 'https://django-anuncios.solyd.com.br/automoveis'
+LINKS = []
+TELEFONES = []
 
 def requisicao(url):
   try:
@@ -60,14 +63,50 @@ def encontrar_telefones(soup):
     return regex
 
 
-resposta_busca = requisicao(URL_AUTOMOVEIS)
+def descobrir_telefones():
+  while True:
+    try:
+      link_anuncio = LINKS.pop(0)
+    except:
+      break
+      return None
 
-if resposta_busca:
-  soup_busca = parsing(resposta_busca)
-  links = encontrar_links(soup_busca)
-  for link in links:
-    resposta_anuncio = requisicao(DOMINIO + link)
+    resposta_anuncio = requisicao(DOMINIO + link_anuncio)
     if resposta_anuncio:
       soup_anuncio = parsing(resposta_anuncio)
       if soup_anuncio:
-        print(encontrar_telefones(soup_anuncio))
+        telefones = encontrar_telefones(soup_anuncio)
+        if telefones:
+          for telefone in telefones:
+            print('Telefone encontrado: ', telefone)
+            TELEFONES.append(telefone)
+            salvar_telefone(telefone)
+
+def salvar_telefone(telefone):
+  string_telefone = "{}{}{}\n".format(telefone[0], telefone[1], telefone[2])
+  try:
+    with open('telefones.csv', 'a') as arquivo:
+      arquivo.write(string_telefone)
+  except Exception as error:
+    print('Erro ao salvar o arquivo')
+    print(error)
+
+if __name__ == '__main__':
+  resposta_busca = requisicao(URL_AUTOMOVEIS)
+  if resposta_busca:
+    soup_busca = parsing(resposta_busca)
+    if soup_busca:
+      LINKS = encontrar_links(soup_busca)
+
+      THREADS = []
+
+      for i in range(5):
+        t = threading.Thread(target=descobrir_telefones)
+        THREADS.append(t)
+
+      for t in THREADS:
+        t.start()
+      
+      for t in THREADS:
+        t.join() # o join fala para o programa 'esperar' a thread terminar de ser executada para seguir a sua execução
+
